@@ -1,0 +1,39 @@
+name: Screenshot gate
+
+# Reusable: sets the commit status "screenshots" on a pull request's head
+# commit from gates/screenshots/check.sh. A repo turns it on with the caller
+# in templates/agent-gates.yml, which also grants the permissions it needs.
+#
+# On a comment event GitHub runs the caller from the repo's default branch,
+# not the PR, so the result is a commit status on the PR's head rather than a
+# check of this run.
+
+on:
+  workflow_call:
+
+jobs:
+  screenshots:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: makallio85/agent-gates
+          ref: dev
+          sparse-checkout: gates
+      - name: Check the PR's screenshot comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number || github.event.issue.number }}
+          REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          head=$(gh api "repos/$REPO/pulls/$PR" --jq .head.sha)
+          if out=$(gates/screenshots/check.sh "$PR" "$REPO" 2>&1); then
+            state=success; description="Screenshots posted"
+          else
+            state=failure; description="No screenshot comment newer than the last code commit"
+          fi
+          echo "$out"
+          gh api "repos/$REPO/statuses/$head" -f state="$state" -f context=screenshots \
+            -f description="$description" -f target_url="$RUN_URL" > /dev/null

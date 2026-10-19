@@ -1,0 +1,27 @@
+name: Agent gates
+
+# Merge gates shared across repos, defined in makallio85/agent-gates.
+# This file is what turns them on here: the Claude Code stop hook runs a gate
+# only in repos that carry it, and the "screenshots" commit status is a
+# required check on the default branch.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  issue_comment:
+    types: [created, edited, deleted]
+
+permissions:
+  contents: read
+  pull-requests: read
+  issues: read
+  statuses: write
+
+concurrency:
+  group: agent-gates-${{ github.event.pull_request.number || github.event.issue.number }}
+  cancel-in-progress: true
+
+jobs:
+  screenshots:
+    if: github.event_name == 'pull_request' || github.event.issue.pull_request
+    uses: makallio85/agent-gates/.github/workflows/screenshots.yml@dev

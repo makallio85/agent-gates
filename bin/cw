@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# Start Claude Code inside a repo, so the repo's CLAUDE.md and .claude/
+# settings load from the start.
+#
+#   cw <repo>          the repo's checkout, ~/<repo>
+#   cw <repo> <PR>     the PR's worktree, ~/agents/<repo>/pr-<PR>, made from
+#                      the PR's branch if it does not exist yet
+#
+# <repo> is a folder name under ~, or its unique ending: "erp" is
+# konekallio-erp, "abax" is konekallio-abax.
+set -euo pipefail
+
+name="${1:?usage: cw <repo> [<PR>]}"
+pr="${2:-}"
+
+repo=""
+if [ -d "$HOME/$name/.git" ]; then
+    repo="$name"
+else
+    matches=$(cd "$HOME" && for d in */.git; do d="${d%/.git}"; [[ "$d" == *-"$name" ]] && echo "$d"; done; true)
+    if [ "$(grep -c . <<<"$matches")" -ne 1 ]; then
+        echo "cw: no single repo under ~ is named '$name' or ends with '-$name'${matches:+: $(echo $matches)}" >&2
+        exit 1
+    fi
+    repo="$matches"
+fi
+checkout="$HOME/$repo"
+
+if [ -z "$pr" ]; then
+    cd "$checkout"
+    exec claude
+fi
+
+dir="$HOME/agents/$repo/pr-$pr"
+if [ ! -d "$dir" ]; then
+    branch=$(cd "$checkout" && gh pr view "$pr" --json headRefName --jq .headRefName)
+    git -C "$checkout" fetch -q origin "$branch"
+    mkdir -p "$HOME/agents/$repo"
+    if git -C "$checkout" show-ref -q --verify "refs/heads/$branch"; then
+        git -C "$checkout" worktree add -q "$dir" "$branch"
+    else
+        git -C "$checkout" worktree add -q --track -b "$branch" "$dir" "origin/$branch"
+    fi
+fi
+cd "$dir"
+exec claude
