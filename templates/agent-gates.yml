@@ -17,11 +17,37 @@ permissions:
   issues: read
   statuses: write
 
+# The gate passes on a comment holding a pinned screenshot link (`?raw=true`)
+# or a "Screens checked:" line, so only a comment that holds one, or held one
+# before an edit or deletion, can change its result. Any other comment, any
+# bot comment (Coolify edits its preview comment many times per deploy) and
+# any push to a draft is skipped: a skipped job is not billed. A skipped run gets a concurrency
+# group of its own; in the PR's group it would cancel a real gate run and
+# leave no status. Keep the two conditions below in step.
 concurrency:
-  group: agent-gates-${{ github.event.pull_request.number || github.event.issue.number }}
+  group: >-
+    ${{ format('agent-gates-{0}{1}',
+        github.event.pull_request.number || github.event.issue.number,
+        (github.event_name == 'pull_request' && github.event.pull_request.draft
+         || github.event_name == 'issue_comment'
+         && (github.event.comment.user.type == 'Bot'
+            || !(contains(github.event.comment.body, '?raw=true')
+                 || contains(github.event.comment.body, 'Screens checked:')
+                 || contains(github.event.changes.body.from, '?raw=true')
+                 || contains(github.event.changes.body.from, 'Screens checked:'))))
+        && format('-skip-{0}', github.run_id) || '') }}
   cancel-in-progress: true
 
 jobs:
   screenshots:
-    if: github.event_name == 'pull_request' || github.event.issue.pull_request
+    # A draft cannot be merged, and marking it ready (ready_for_review) runs
+    # the gate, so pushes to a draft skip it.
+    if: >-
+      (github.event_name == 'pull_request' && !github.event.pull_request.draft)
+      || (github.event.issue.pull_request
+          && github.event.comment.user.type != 'Bot'
+          && (contains(github.event.comment.body, '?raw=true')
+              || contains(github.event.comment.body, 'Screens checked:')
+              || contains(github.event.changes.body.from, '?raw=true')
+              || contains(github.event.changes.body.from, 'Screens checked:')))
     uses: makallio85/agent-gates/.github/workflows/screenshots.yml@dev
