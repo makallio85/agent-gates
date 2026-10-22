@@ -21,6 +21,14 @@ session was started:
 
 Logic: `gates/screenshots/check.sh <PR> <owner/repo>`.
 
+The template runs the gate on a push to a ready PR, on marking a PR ready, and
+on a comment holding a `?raw=true` link or a `Screens checked:` line — or one
+that held either before an edit or deletion. Other comments, bot comments and
+pushes to drafts cannot change the result and are skipped: a skipped job is
+not billed. A skipped run gets a concurrency group of its own, so it never
+cancels a real gate run. A comment-triggered run uses the default branch's
+copy of the file, so a change to these conditions takes effect once merged.
+
 ## Turning the gates on in a repo
 
 1. Copy `templates/agent-gates.yml` to the repo's `.github/workflows/agent-gates.yml`
